@@ -67,7 +67,6 @@ pipeline {
                             url: 'http://172.31.45.37:8080'
                         )
                     ],
-                    contextPath: '/java-web-app',
                     war: 'target/java-web-app.war'
                 )
             }
