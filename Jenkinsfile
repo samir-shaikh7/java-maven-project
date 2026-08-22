@@ -64,7 +64,7 @@ pipeline {
                     adapters: [
                         tomcat9(
                             credentialsId: 'tomcat-staging',
-                            url: 'http://172.31.45.37:8080'
+                            url: 'http://172.31.45.37:8080/'
                         )
                     ],
                     war: 'target/java-web-app.war'
