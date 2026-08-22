@@ -57,6 +57,20 @@ pipeline {
                 sh 'mvn package -DskipTests'
             }
         }
+
+        stage('Deploy to Staging') {
+            steps {
+                deploy adapters: [
+                    tomcat9(
+                        credentialsId: 'tomcat-staging',
+                        path: 'java-web-app',
+                        url: 'http://172.31.XX.XX:8080'
+                    )
+                ],
+                contextPath: 'java-web-app',
+                war: 'target/java-web-app.war'
+            }
+        }
     }
 
     post {
