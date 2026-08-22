@@ -71,6 +71,27 @@ pipeline {
                 )
             }
         }
+        
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    echo "Running staging smoke test..."
+        
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                    http://172.31.45.37:8080/java-web-app)
+        
+                    echo "HTTP Status: $STATUS"
+        
+                    if [ "$STATUS" -ne 200 ]; then
+                        echo "Smoke Test FAILED"
+                        exit 1
+                    fi
+        
+                    echo "Smoke Test PASSED"
+                '''
+            }
+        }
+        
     }
 
     post {
