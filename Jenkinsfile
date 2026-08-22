@@ -91,6 +91,15 @@ pipeline {
                 '''
             }
         }
+
+        stage('Production Approval') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    input message: 'Staging smoke test passed. Deploy to Production?',
+                          ok: 'Approve Production Deployment'
+                }
+            }
+        }
         
     }
 
