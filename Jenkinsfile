@@ -34,9 +34,11 @@ pipeline {
             steps {
                 withSonarQubeEnv("${SONARQUBE}") {
                     sh '''
-                        mvn sonar:sonar \
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
                         -Dsonar.projectKey=java-web-app \
-                        -Dsonar.projectName="Java Application - Java-Web-App"
+                        -Dsonar.projectName="Java Application - MyApp" \
+                        -Dsonar.host.url="$SONAR_HOST_URL" \
+                        -Dsonar.token="$SONAR_AUTH_TOKEN"
                     '''
                 }
             }
@@ -55,7 +57,6 @@ pipeline {
                 sh 'mvn package -DskipTests'
             }
         }
-
     }
 
     post {
