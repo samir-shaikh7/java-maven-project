@@ -67,26 +67,29 @@ pipeline {
                             url: 'http://172.31.45.37:8080'
                         )
                     ],
-                    contextPath: 'java-web-app',
+                    contextPath: '/java-web-app',
                     war: 'target/java-web-app.war'
                 )
             }
         }
+    }
 
     post {
 
         success {
-            echo 'CI Pipeline completed successfully!'
+            echo 'CI/CD pipeline completed successfully!'
         }
 
         failure {
-            echo 'CI Pipeline failed!'
+            echo 'CI/CD pipeline failed!'
         }
 
         always {
-            archiveArtifacts artifacts: 'target/*.war',
-                             fingerprint: true,
-                             allowEmptyArchive: true
+            archiveArtifacts(
+                artifacts: 'target/*.war',
+                fingerprint: true,
+                allowEmptyArchive: true
+            )
         }
     }
 }
