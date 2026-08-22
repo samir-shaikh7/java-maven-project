@@ -64,7 +64,7 @@ pipeline {
                     tomcat9(
                         credentialsId: 'tomcat-staging',
                         path: 'java-web-app',
-                        url: 'http://172.31.XX.XX:8080'
+                        url: 'http://172.31.45.37:8080'
                     )
                 ],
                 contextPath: 'java-web-app',
