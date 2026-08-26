@@ -7,14 +7,22 @@ pipeline {
     }
 
     environment {
-        SONARQUBE = 'SonarQube'
+
+        STAGING_URL = 'http://172.31.20.145:8080'
+        PRODUCTION_URL = 'http://172.31.21.123:8080'
+
+        APP_NAME = 'java-web-app'
+        WAR_FILE = 'target/java-web-app.war'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                checkout scm
+                git(
+                    branch: 'main',
+                    url: 'https://github.com/samir-shaikh7/java-maven-project.git'
+                )
             }
         }
 
@@ -32,21 +40,32 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv("${SONARQUBE}") {
-                    sh '''
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
-                        -Dsonar.projectKey=java-web-app \
-                        -Dsonar.projectName="Java Application - MyApp" \
-                        -Dsonar.host.url="$SONAR_HOST_URL" \
-                        -Dsonar.token="$SONAR_AUTH_TOKEN"
-                    '''
+
+                withSonarQubeEnv('SonarQube') {
+
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonarqube-token',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
+
+                        sh '''
+                            mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                            -Dsonar.projectKey=java-web-app \
+                            -Dsonar.projectName=java-web-app \
+                            -Dsonar.token=$SONAR_TOKEN
+                        '''
+                    }
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
+
                 timeout(time: 5, unit: 'MINUTES') {
+
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -54,71 +73,116 @@ pipeline {
 
         stage('Package WAR') {
             steps {
+
                 sh 'mvn package -DskipTests'
+
+                sh 'ls -lh target/java-web-app.war'
             }
         }
 
-        stage('Deploy to Staging') {
+        stage('Deploy to Testing-Server') {
             steps {
-                deploy(
-                    adapters: [
-                        tomcat9(
-                            credentialsId: 'tomcat-staging',
-                            url: 'http://172.31.45.37:8080/'
-                        )
-                    ],
-                    war: 'target/java-web-app.war'
-                )
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'tomcat-testing',
+                        usernameVariable: 'TOMCAT_USER',
+                        passwordVariable: 'TOMCAT_PASSWORD'
+                    )
+                ]) {
+
+                    sh '''
+                        curl --fail \
+                        --user "$TOMCAT_USER:$TOMCAT_PASSWORD" \
+                        --upload-file "$WAR_FILE" \
+                        "$STAGING_URL/manager/text/deploy?path=/$APP_NAME&update=true"
+                    '''
+                }
             }
         }
-        
+
         stage('Smoke Test') {
             steps {
+
                 sh '''
-                    echo "Running staging smoke test..."
-        
                     STATUS=$(curl -L -s -o /dev/null -w "%{http_code}" \
-                    http://172.31.45.37:8080/java-web-app)
-        
-                    echo "Final HTTP Status: $STATUS"
-        
-                    if [ "$STATUS" -ne 200 ]; then
-                        echo "Smoke Test FAILED"
+                    "$STAGING_URL/$APP_NAME")
+
+                    echo "Staging HTTP Status: $STATUS"
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "Staging smoke test failed"
                         exit 1
                     fi
-        
-                    echo "Smoke Test PASSED"
+
+                    echo "Staging smoke test passed"
                 '''
             }
         }
 
         stage('Production Approval') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    input message: 'Staging smoke test passed. Deploy to Production?',
-                          ok: 'Approve Production Deployment'
+
+                input(
+                    message: 'Deploy to Production?',
+                    ok: 'Deploy'
+                )
+            }
+        }
+
+        stage('Deploy to Production-Server') {
+            steps {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'tomcat-production',
+                        usernameVariable: 'TOMCAT_USER',
+                        passwordVariable: 'TOMCAT_PASSWORD'
+                    )
+                ]) {
+
+                    sh '''
+                        curl --fail \
+                        --user "$TOMCAT_USER:$TOMCAT_PASSWORD" \
+                        --upload-file "$WAR_FILE" \
+                        "$PRODUCTION_URL/manager/text/deploy?path=/$APP_NAME&update=true"
+                    '''
                 }
             }
         }
-        
+
+        stage('Production Smoke Test') {
+            steps {
+
+                sh '''
+                    STATUS=$(curl -L -s -o /dev/null -w "%{http_code}" \
+                    "$PRODUCTION_URL/$APP_NAME")
+
+                    echo "Production HTTP Status: $STATUS"
+
+                    if [ "$STATUS" != "200" ]; then
+                        echo "Production smoke test failed"
+                        exit 1
+                    fi
+
+                    echo "Production smoke test passed"
+                '''
+            }
+        }
     }
 
     post {
 
         success {
-            echo 'CI/CD pipeline completed successfully!'
+            echo 'CI/CD Pipeline completed successfully.'
         }
 
         failure {
-            echo 'CI/CD pipeline failed!'
+            echo 'CI/CD Pipeline failed.'
         }
 
         always {
-            archiveArtifacts(
-                artifacts: 'target/*.war',
-                fingerprint: true,
-                allowEmptyArchive: true
-            )
+            echo 'Pipeline execution completed.'
         }
     }
 }
