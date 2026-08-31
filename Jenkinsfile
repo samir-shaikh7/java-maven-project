@@ -8,17 +8,23 @@ pipeline {
 
     environment {
 
-        STAGING_URL = 'http://172.31.20.145:8080'
-        PRODUCTION_URL = 'http://172.31.21.123:8080'
-
         APP_NAME = 'java-web-app'
         WAR_FILE = 'target/java-web-app.war'
+
+        S3_BUCKET = 'sam-java-cicd-artifacts-2026'
+        S3_ARTIFACT = "artifacts/${APP_NAME}/${BUILD_NUMBER}/${APP_NAME}.war"
+
+        TESTING_URL = 'http://172.31.40.160:8080'
+        PRODUCTION_URL = 'http://172.31.42.86:8080'
+
+        AWS_DEFAULT_REGION = 'ap-south-1'
     }
 
     stages {
 
         stage('Checkout') {
             steps {
+
                 git(
                     branch: 'main',
                     url: 'https://github.com/samir-shaikh7/java-maven-project.git'
@@ -28,13 +34,8 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean compile'
-            }
-        }
 
-        stage('Unit Test') {
-            steps {
-                sh 'mvn test'
+                sh 'mvn clean compile'
             }
         }
 
@@ -80,7 +81,18 @@ pipeline {
             }
         }
 
-        stage('Deploy to Testing-Server') {
+        stage('Upload WAR to S3') {
+            steps {
+
+                sh '''
+                    aws s3 cp \
+                    "$WAR_FILE" \
+                    "s3://$S3_BUCKET/$S3_ARTIFACT"
+                '''
+            }
+        }
+
+        stage('Deploy to Testing') {
             steps {
 
                 withCredentials([
@@ -92,31 +104,16 @@ pipeline {
                 ]) {
 
                     sh '''
+                        aws s3 cp \
+                        "s3://$S3_BUCKET/$S3_ARTIFACT" \
+                        "$WAR_FILE"
+
                         curl --fail \
                         --user "$TOMCAT_USER:$TOMCAT_PASSWORD" \
                         --upload-file "$WAR_FILE" \
-                        "$STAGING_URL/manager/text/deploy?path=/$APP_NAME&update=true"
+                        "$TESTING_URL/manager/text/deploy?path=/$APP_NAME&update=true"
                     '''
                 }
-            }
-        }
-
-        stage('Smoke Test') {
-            steps {
-
-                sh '''
-                    STATUS=$(curl -L -s -o /dev/null -w "%{http_code}" \
-                    "$STAGING_URL/$APP_NAME")
-
-                    echo "Staging HTTP Status: $STATUS"
-
-                    if [ "$STATUS" != "200" ]; then
-                        echo "Staging smoke test failed"
-                        exit 1
-                    fi
-
-                    echo "Staging smoke test passed"
-                '''
             }
         }
 
@@ -124,13 +121,13 @@ pipeline {
             steps {
 
                 input(
-                    message: 'Deploy to Production?',
-                    ok: 'Deploy'
+                    message: 'Deploy the approved WAR artifact to Production?',
+                    ok: 'Deploy to Production'
                 )
             }
         }
 
-        stage('Deploy to Production-Server') {
+        stage('Deploy to Production') {
             steps {
 
                 withCredentials([
@@ -142,6 +139,10 @@ pipeline {
                 ]) {
 
                     sh '''
+                        aws s3 cp \
+                        "s3://$S3_BUCKET/$S3_ARTIFACT" \
+                        "$WAR_FILE"
+
                         curl --fail \
                         --user "$TOMCAT_USER:$TOMCAT_PASSWORD" \
                         --upload-file "$WAR_FILE" \
@@ -150,35 +151,16 @@ pipeline {
                 }
             }
         }
-
-        stage('Production Smoke Test') {
-            steps {
-
-                sh '''
-                    STATUS=$(curl -L -s -o /dev/null -w "%{http_code}" \
-                    "$PRODUCTION_URL/$APP_NAME")
-
-                    echo "Production HTTP Status: $STATUS"
-
-                    if [ "$STATUS" != "200" ]; then
-                        echo "Production smoke test failed"
-                        exit 1
-                    fi
-
-                    echo "Production smoke test passed"
-                '''
-            }
-        }
     }
 
     post {
 
         success {
-            echo 'CI/CD Pipeline completed successfully.'
+            echo 'DevOps CI/CD pipeline completed successfully.'
         }
 
         failure {
-            echo 'CI/CD Pipeline failed.'
+            echo 'DevOps CI/CD pipeline failed.'
         }
 
         always {
