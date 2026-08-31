@@ -6,10 +6,6 @@ pipeline {
         skipDefaultCheckout(true)
     }
 
-    tools {
-        maven 'maven'
-    }
-
     environment {
 
         APP_NAME = 'java-web-app'
@@ -81,7 +77,7 @@ pipeline {
 
                 sh 'mvn package -DskipTests'
 
-                sh 'ls -lh target/java-web-app.war'
+                sh 'ls -lh "$WAR_FILE"'
             }
         }
 
@@ -158,21 +154,6 @@ pipeline {
                     '''
                 }
             }
-        }
-    }
-
-    post {
-
-        success {
-            echo 'DevOps CI/CD pipeline completed successfully.'
-        }
-
-        failure {
-            echo 'DevOps CI/CD pipeline failed.'
-        }
-
-        always {
-            echo 'Pipeline execution completed.'
         }
     }
 }
