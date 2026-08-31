@@ -2,6 +2,10 @@ pipeline {
 
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+    }
+
     tools {
         maven 'maven'
     }
@@ -22,7 +26,7 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
+        stage('Source Code Checkout') {
             steps {
 
                 git(
@@ -32,14 +36,14 @@ pipeline {
             }
         }
 
-        stage('Build') {
+        stage('Maven Build') {
             steps {
 
                 sh 'mvn clean compile'
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Code Quality Analysis') {
             steps {
 
                 withSonarQubeEnv('SonarQube') {
@@ -62,7 +66,7 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
+        stage('Quality Gate Validation') {
             steps {
 
                 timeout(time: 5, unit: 'MINUTES') {
@@ -72,7 +76,7 @@ pipeline {
             }
         }
 
-        stage('Package WAR') {
+        stage('WAR Artifact Packaging') {
             steps {
 
                 sh 'mvn package -DskipTests'
@@ -81,7 +85,7 @@ pipeline {
             }
         }
 
-        stage('Upload WAR to S3') {
+        stage('Upload Artifact to S3') {
             steps {
 
                 sh '''
@@ -92,7 +96,7 @@ pipeline {
             }
         }
 
-        stage('Deploy to Testing') {
+        stage('Deploy to Testing Environment') {
             steps {
 
                 withCredentials([
@@ -104,6 +108,8 @@ pipeline {
                 ]) {
 
                     sh '''
+                        rm -f "$WAR_FILE"
+
                         aws s3 cp \
                         "s3://$S3_BUCKET/$S3_ARTIFACT" \
                         "$WAR_FILE"
@@ -117,17 +123,17 @@ pipeline {
             }
         }
 
-        stage('Production Approval') {
+        stage('Production Deployment Approval') {
             steps {
 
                 input(
-                    message: 'Deploy the approved WAR artifact to Production?',
+                    message: 'Deploy the approved artifact to Production?',
                     ok: 'Deploy to Production'
                 )
             }
         }
 
-        stage('Deploy to Production') {
+        stage('Deploy to Production Environment') {
             steps {
 
                 withCredentials([
@@ -139,6 +145,8 @@ pipeline {
                 ]) {
 
                     sh '''
+                        rm -f "$WAR_FILE"
+
                         aws s3 cp \
                         "s3://$S3_BUCKET/$S3_ARTIFACT" \
                         "$WAR_FILE"
